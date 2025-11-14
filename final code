@@ -1,0 +1,165 @@
+import os
+import time
+import threading
+import tempfile
+import logging
+from fuzzywuzzy import fuzz
+import speech_recognition as sr
+from gtts import gTTS
+
+# ------------------ CONFIG ------------------
+DATASET_PATH = r"C:\Users\Hp\Downloads\aero"
+LABELS_CSV = os.path.join(DATASET_PATH, "labels.csv")
+
+LANG = "en-US"
+FUZZY_THRESHOLD = 75
+DEBUG = False
+
+logging.basicConfig(level=logging.DEBUG if DEBUG else logging.INFO)
+
+recognizer = sr.Recognizer()
+mic = sr.Microphone()
+
+DEFAULT_CLASSES = ["yes", "no", "on", "off", "up", "down", "ok"]
+
+# ------------------ INTENTS ------------------
+ACTIONS = {
+    "gear_up": "Landing gear retracted.",
+    "gear_down": "Landing gear deployed.",
+    "flaps_up": "Flaps retracted.",
+    "flaps_down": "Flaps extended.",
+    "engine_start": "Engine starting sequence initiated.",
+    "engine_stop": "Engine shutdown sequence initiated.",
+    "autopilot_on": "Autopilot engaged.",
+    "autopilot_off": "Autopilot disengaged.",
+    "climb": "Climbing.",
+    "descend": "Descending.",
+    "turn_left": "Turning left.",
+    "turn_right": "Turning right.",
+    "hold_altitude": "Holding altitude.",
+    "go_around": "Executing go-around.",
+    "takeoff": "Takeoff procedure started.",
+    "land": "Landing sequence initiated.",
+    "increase_speed": "Increasing airspeed.",
+    "decrease_speed": "Decreasing airspeed.",
+    "lights_on": "All lights switched on.",
+    "lights_off": "All lights switched off.",
+    "yes": "Affirmative.",
+    "no": "Negative.",
+    "ok": "Okay.",
+    "up": "Moving up.",
+    "down": "Moving down.",
+    "on": "System activated.",
+    "off": "System deactivated.",
+    "unknown": "Command not recognized.",
+    "takeoff": "gohead."
+}
+
+# ------------------ LOAD INTENT MAP ------------------
+def load_intent_map():
+    intent_map = {}
+
+    if os.path.exists(LABELS_CSV):
+        try:
+            import pandas as pd
+            df = pd.read_csv(LABELS_CSV)
+            if "transcript" in df.columns and "intent" in df.columns:
+                for t, i in zip(df["transcript"], df["intent"]):
+                    intent_map[t.lower()] = i.lower()
+                return intent_map
+        except:
+            pass
+
+    if os.path.isdir(DATASET_PATH):
+        folders = [
+            name for name in os.listdir(DATASET_PATH)
+            if os.path.isdir(os.path.join(DATASET_PATH, name))
+        ]
+        if folders:
+            for f in folders:
+                intent_map[f.lower()] = f.lower()
+            return intent_map
+
+    for c in DEFAULT_CLASSES:
+        intent_map[c] = c
+
+    return intent_map
+
+intent_map = load_intent_map()
+
+# ------------------ MATCHING ------------------
+def match_intent(text):
+    if not text:
+        return "unknown"
+    text = text.lower()
+
+    best_intent = "unknown"
+    best_score = 0
+
+    for phrase in ACTIONS.keys():
+        score = fuzz.partial_ratio(phrase, text)
+        if score > best_score:
+            best_score = score
+            best_intent = phrase
+
+    return best_intent if best_score >= FUZZY_THRESHOLD else "unknown"
+
+# ------------------ SPEAK ------------------
+def speak_async(text):
+    def _speak():
+        try:
+            tts = gTTS(text=text, lang="en")
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as f:
+                fname = f.name
+            tts.save(fname)
+            os.startfile(fname)
+            time.sleep(3)
+            try:
+                os.remove(fname)
+            except:
+                pass
+        except Exception as e:
+            print("TTS Error:", e)
+
+    threading.Thread(target=_speak, daemon=True).start()
+
+# ------------------ ACTION ------------------
+def perform_action(intent):
+    response = ACTIONS.get(intent, ACTIONS["unknown"])
+    print("[ACTION]", response)
+    speak_async(response)
+
+# ------------------ CALLBACK ------------------
+def callback(recognizer_obj, audio):
+    try:
+        text = recognizer_obj.recognize_google(audio, language=LANG)
+        print("[RECOGNIZED]", text)
+        intent = match_intent(text)
+        perform_action(intent)
+    except sr.UnknownValueError:
+        pass
+    except Exception as e:
+        print("Error:", e)
+
+# ------------------ MAIN ------------------
+def main():
+    print("🛫 Smart Cockpit Assistant (Real-time)")
+    print("Speak commands. Press Ctrl+C to stop.")
+
+    with mic as source:
+        recognizer.adjust_for_ambient_noise(source, duration=1)
+        print("Listening...")
+
+    stop = recognizer.listen_in_background(mic, callback, phrase_time_limit=5)
+
+    try:
+        while True:
+            time.sleep(0.1)
+    except KeyboardInterrupt:
+        print("Stopping...")
+        stop(wait_for_stop=False)
+        time.sleep(1)
+        print("Stopped.")
+
+if __name__ == "__main__":
+    main()
