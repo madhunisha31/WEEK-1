@@ -1,4 +1,4 @@
-# WEEK-1
+WEEK-1
 This project develops an AI-based cockpit assistant that recognizes pilot voice commands using speech recognition and NLP. It converts spoken instructions like take off or land into actions and provides voice responses, enhancing flight automation, safety, and human–machine interaction.
 at last of week 3
 ✈️ Smart Voice-Activated Cockpit Assistant
@@ -45,7 +45,7 @@ Maps intent to functions such as autopilot control, gear movement, flaps, altitu
 Uses gTTS to speak back confirmations, ensuring closed-loop communication.
 
 This system acts as a supportive AI co-pilot that assists pilots without interfering with primary controls.
-
+WEEK 2 & 3 
 📐 Methodology (4-Step Workflow)
 1. Real-Time Voice Capture
 
